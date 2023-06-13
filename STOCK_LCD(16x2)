@@ -1,0 +1,99 @@
+// This code will print the current price of IBM Stock on 16X2 LCD display having 3F I2C addrress
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+
+const char* ssid = "Elconics";
+const char* password = "Elconics@2023";
+const char* apiKey = "2HYMRMTIAPQMP0SC";
+const char* symbol = "IBM"; // Specify the stock symbol here
+
+LiquidCrystal_I2C lcd(0x3F, 16, 2);  // Adjust the address and dimensions for your LCD module
+
+void setup() {
+  Serial.begin(115200);
+  lcd.begin();  // Initialize the LCD display
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Connecting...");
+    delay(1000);
+
+  }
+
+  Serial.println("Connected to WiFi");
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Connected...");
+  delay(2000);
+}
+
+void loop() {
+  // Check if Wi-Fi is still connected
+  if (WiFi.status() == WL_CONNECTED) {
+    // Create an HTTP object
+    HTTPClient http;
+
+    // Create the URL for the API request
+    String url = "https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=";
+    url += symbol;
+    url += "&apikey=";
+    url += apiKey;
+
+    // Specify the target URL
+    http.begin(url.c_str());
+
+    // Send the HTTP GET request
+    int httpResponseCode = http.GET();
+
+    // Check the response code
+    if (httpResponseCode == HTTP_CODE_OK) {
+      // Get the response payload
+      String payload = http.getString();
+
+      // Parse the JSON payload
+      DynamicJsonDocument doc(1024);
+      deserializeJson(doc, payload);
+
+      // Extract the stock price from the JSON response
+      const char* price = doc["Global Quote"]["05. price"];
+      if (price) {
+        // Print the stock price to the serial monitor
+        Serial.print("Stock Price (");
+        Serial.print(symbol);
+        Serial.print("): ");
+        Serial.println(price);
+
+        // Display the stock price on the LCD
+        lcd.clear();
+        lcd.setCursor(6, 0);
+        lcd.print(symbol);
+        lcd.setCursor(0, 1);
+        lcd.print("Price: $");
+        lcd.print(price);
+      } else {
+        Serial.println("Error extracting stock price from JSON response");
+      }
+    } else {
+      Serial.print("Error retrieving stock price. HTTP response code: ");
+      Serial.println(httpResponseCode);
+    }
+
+    // Disconnect from the server
+    http.end();
+  } else {
+    Serial.println("Wi-Fi disconnected. Reconnecting...");
+    WiFi.begin(ssid, password);
+  }
+
+  // Wait for some time before making the next request
+  delay(5000);
+}
