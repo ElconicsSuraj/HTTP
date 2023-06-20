@@ -1,0 +1,127 @@
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <WiFiManager.h> // Add WiFi Manager library
+
+LiquidCrystal_I2C lcd(0x3F, 16, 2); // Initialize the LCD object
+
+void setup() {
+  Serial.begin(115200);
+  lcd.begin();
+  lcd.print("Initializing...");
+
+  // Initialize WiFi Manager
+  WiFiManager wifiManager;
+  wifiManager.autoConnect("ESP32WiFi");
+
+  lcd.clear();
+  lcd.print("Connected!");
+
+  // Connect to Wi-Fi
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    lcd.clear();
+    lcd.print("Connecting...");
+  }
+
+  lcd.clear();
+  lcd.print("Connected!");
+}
+
+void loop() {
+  // Wait for a while before making the next request
+  delay(5000);
+
+  // Make HTTP request to Open-Meteo API
+  HTTPClient http;
+  String url = "https://api.open-meteo.com/v1/forecast?latitude=13.09&longitude=77.01&current_weather=true&hourly=temperature_2m,relativehumidity_2m,windspeed_10m";
+  Serial.print("Requesting URL: ");
+  Serial.println(url);
+
+  http.begin(url);
+  int httpResponseCode = http.GET();
+
+  if (httpResponseCode == HTTP_CODE_OK) {
+    String payload = http.getString();
+
+    // Parse the JSON response
+    DynamicJsonDocument doc(16384);
+
+DeserializationError error = deserializeJson(doc, payload);
+
+if (error) {
+  Serial.print("deserializeJson() failed: ");
+  Serial.println(error.c_str());
+  return;
+}
+
+int latitude = doc["latitude"]; // 90
+float longitude = doc["longitude"]; // 89.875
+double generationtime_ms = doc["generationtime_ms"]; // 0.247955322265625
+int utc_offset_seconds = doc["utc_offset_seconds"]; // 0
+const char* timezone = doc["timezone"]; // "GMT"
+const char* timezone_abbreviation = doc["timezone_abbreviation"]; // "GMT"
+int elevation = doc["elevation"]; // 0
+
+JsonObject current_weather = doc["current_weather"];
+float current_weather_temperature = current_weather["temperature"]; // -0.3
+float current_weather_windspeed = current_weather["windspeed"]; // 25.1
+int current_weather_winddirection = current_weather["winddirection"]; // 173
+int current_weather_weathercode = current_weather["weathercode"]; // 71
+int current_weather_is_day = current_weather["is_day"]; // 1
+const char* current_weather_time = current_weather["time"]; // "2023-06-20T05:00"
+
+JsonObject hourly_units = doc["hourly_units"];
+const char* hourly_units_time = hourly_units["time"]; // "iso8601"
+const char* hourly_units_temperature_2m = hourly_units["temperature_2m"]; // "°C"
+const char* hourly_units_relativehumidity_2m = hourly_units["relativehumidity_2m"]; // "%"
+const char* hourly_units_windspeed_10m = hourly_units["windspeed_10m"]; // "km/h"
+
+
+Serial.print("Latitude is :");
+Serial.println(latitude);
+
+Serial.print("Longitude is :");
+Serial.println(longitude);
+
+Serial.print("current_weather_temperature is :");
+Serial.println(current_weather_temperature);
+
+Serial.print("current_weather_windspeed is :");
+Serial.println(current_weather_windspeed);
+
+Serial.print("current_weather_time is :");
+Serial.println(current_weather_time);
+
+
+Serial.print("current_weather_winddirection is :");
+Serial.println(current_weather_winddirection);
+
+
+    // Display the data on LCD
+    lcd.clear();
+    lcd.print("Temp: ");
+    lcd.print(current_weather_temperature);
+    lcd.print("C");
+    lcd.setCursor(0, 1);
+    lcd.print("Humidity: ");
+    lcd.print(current_weather_windspeed);
+    lcd.print("%");
+
+    // Print the data to Serial Monitor
+    Serial.print("Time: ");
+    Serial.print(current_weather_time);
+    Serial.println(" °C");
+
+    Serial.print("Windspeed: ");
+    Serial.print(current_weather_winddirection);
+    Serial.println(" m/s");
+  } else {
+    Serial.print("HTTP request failed. Error code: ");
+    Serial.println(httpResponseCode);
+  }
+
+  http.end();
+}
